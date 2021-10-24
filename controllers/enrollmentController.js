@@ -2,8 +2,55 @@ const express = require('express');
 const mongoose = require('mongoose');
 const nodemailer = require('nodemailer');
 const Enrollment = require('../models/enrollment.model');
+const { google } = require('googleapis');
 
 require('dotenv').config();
+
+//Goole OAuth Account Setup
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = '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';
+const REDIRECT_URI = process.env.REDIRECT_URI;
+const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
+const oAuth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI)
+oAuth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
+
+//Function to send email using nodemailer and oauth2 credentials
+const sendMail = async (email, uniqueString) => {
+    try {
+
+        //Create nodemailer transport and email template 
+        const accessToken = await oAuth2Client.getAccessToken();
+
+        const Transport = nodemailer.createTransport({
+            service: 'Gmail',
+            auth: {
+                type: 'OAuth2',
+                user: 'jpatrickpajarillo@gmail.com',
+                clientId: CLIENT_ID,
+                clientSecret: CLIENT_SECRET,
+                refreshToken: REFRESH_TOKEN,
+                accessToken: accessToken 
+            }
+        });
+
+        const mailOptions = {
+            from: 'St. Clare College',
+            to: email,
+            subject: "Please verify your email address to complete the process.",
+            text: `Your 8-digit code is ${uniqueString}`
+        };
+
+        //Send Email
+        await Transport.sendMail(mailOptions);
+
+    }
+    catch(error) {
+        console.log(error);
+        return error;
+    }
+}
+
+
 
 const enroll = async (req, res) => {
     const { lastname, firstname, middlename, email, phonenumber, address, birthdate, birthplace, nationality, religion, sex, yearlevel, semester } = req.body;
@@ -49,33 +96,17 @@ const enroll = async (req, res) => {
         //Save enrollee to database
         const newEnrollee = await enrollee.save();
 
-        //Create nodemailer transport and email template 
-        const Transport = nodemailer.createTransport({
-            service: 'Gmail',
-            auth: {
-                user: "jpatrickpajarillo@gmail.com",
-                pass: process.env.EMAIL_PASSWORD
-            }
-        });
+        //Call Function to send email
+        sendMail(enrollee.email, uniqueString)
+            .then(() => {
+                res.status(201).json(newEnrollee);
+            })
+            .catch((error) => {
+                console.log(error);
+                return res.status(500).json({ message: error })
+            })
 
-        let sender = "St. Clare College";
-        const mailOptions = {
-            from: sender,
-            to: enrollee.email,
-            subject: "Please verify your email address to complete the process.",
-            text: `Your 8-digit code is ${uniqueString}`
-        };
-        //Send Email
-        Transport.sendMail(mailOptions, () => {
-            if (error) {
-                console.log("error");
-                return res.status(500).json({message: "email not sent"});
-            } else {
-                console.log("Message Sent");
-            }
-        });
-
-        res.status(201).json(newEnrollee);
+        
 
     } catch (err) {
         res.status(500).json({message: err.message});
