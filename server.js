@@ -2,6 +2,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const enrollmentRouter = require('./routes/tertiary');
+const accountRouter = require('./routes/accountRouter');
 
 require('dotenv').config();
 
@@ -21,8 +23,8 @@ connection.once('open', () => console.log('connected to database'));
 
 
 //Routes
-const enrollmentRouter = require('./routes/tertiary');
 app.use('/enrollment', enrollmentRouter);
+app.use('/', accountRouter);
 
 
 //Server Listen
